@@ -5,10 +5,11 @@ from sklearn.linear_model import ElasticNet
 
 
 class PipelineElasticNetV1(PdPipelineAndSklearnEstimator):
-    def __init__(self, num_columns, cat_columns, best_params, date_column='date'):
+    def __init__(self, num_columns, cat_columns, alpha, l1_ratio, date_column='date'):
         self.num_columns = num_columns
         self.cat_columns = cat_columns
-        self.best_params = best_params
+        self.alpha = alpha
+        self.l1_ratio = l1_ratio
         self.date_column = date_column
 
         pipeline = pdp.PdPipeline([
@@ -16,5 +17,5 @@ class PipelineElasticNetV1(PdPipelineAndSklearnEstimator):
             pdp.OneHotEncode(self.cat_columns),
             pdp.ColDrop([self.date_column, 'family']),
         ])
-        model = PositiveRegressor(ElasticNet(alpha=best_params, l1_ratio=0.1, tol=0.0001, max_iter=50))
+        model = PositiveRegressor(ElasticNet(alpha=self.alpha, l1_ratio=self.l1_ratio))
         super().__init__(pipeline=pipeline, estimator=model)

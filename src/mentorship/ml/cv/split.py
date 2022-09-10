@@ -4,7 +4,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 
 class DateTimeSeriesSplit:
-    def __init__(self, date_column='date', n_splits=4, max_train_size=365, test_size=15):
+    def __init__(self, date_column='date', n_splits=4, max_train_size=365, test_size=16):
         self.date_column = date_column
         self.n_splits = n_splits
         self.max_train_size = max_train_size
