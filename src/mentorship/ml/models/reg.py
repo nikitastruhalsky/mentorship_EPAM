@@ -1,14 +1,19 @@
-from sklearn.base import RegressorMixin, MetaEstimatorMixin, BaseEstimator
+from sklearn.base import RegressorMixin, BaseEstimator
 import numpy as np
 
 
-class PositiveRegressor(RegressorMixin, MetaEstimatorMixin, BaseEstimator):
-    def __init__(self, estimator):
+class PositiveRegressor(BaseEstimator, RegressorMixin):
+    def __init__(self, estimator, fit_params=None):
         """Regressor that always predicts positive values"""
-        self.estimator = estimator
 
-    def fit(self, X, y, **fit_params):
-        return self.estimator.fit(X, y, **fit_params)
+        if fit_params is None:
+            fit_params = {}
+        self.estimator = estimator
+        self.fit_params = fit_params
+
+    def fit(self, X, y=None):
+        self.estimator = self.estimator.fit(X, y, **self.fit_params)
+        return self
 
     def predict(self, X):
         y_pred = self.estimator.predict(X)

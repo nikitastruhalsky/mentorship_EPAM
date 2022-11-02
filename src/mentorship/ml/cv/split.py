@@ -12,7 +12,7 @@ class DateTimeSeriesSplit:
 
     def split(self, X, y=None, groups=None):
         dates = pd.DataFrame(data=X[self.date_column]).drop_duplicates(ignore_index=True)
-        dates = dates.sort_values('date')
+        dates = dates.sort_values(self.date_column)
         tscv = TimeSeriesSplit(gap=0, max_train_size=self.max_train_size, n_splits=self.n_splits,
                                test_size=self.test_size)
         for train_index, test_index in tscv.split(dates):
