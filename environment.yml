@@ -3,8 +3,8 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - boruta_py
-  - category_encoders
+  - boruta_py=0.3
+  - category_encoders=2.5.1.post0
   - click=7.1.2
   - cmdstanpy=1.0.4
   - cython=0.29.23
@@ -35,9 +35,9 @@ dependencies:
   - scikit-optimize=0.9.0
   - scipy=1.7.2
   - seaborn=0.11.2
-  - shap
+  - shap=0.41.0
   - tqdm=4.59.0
   - pip:
     - pdpipe==0.3.0
     - prophet==1.1
-    - skforecast
+    - skforecast==0.5.1

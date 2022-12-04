@@ -1,46 +1,32 @@
 from numpy.lib.stride_tricks import sliding_window_view
-from sklearn.base import clone, BaseEstimator
+from mentorship.ml.models.common import RecursiveTSEstimator
 import numpy as np
 import pandas as pd
 
 
-class RecursiveTSEstimator(BaseEstimator):
-    def __init__(self, split_key, target_col, base_pipelines=None, trend_pred=None, y_detrended=None,
-                 detrended_categories=None, trend_models=None):
-        if base_pipelines is None:
-            base_pipelines = {}
-        if detrended_categories is None:
-            detrended_categories = []
-        if trend_models is None:
-            trend_models = []
-        self.detrended_categories = detrended_categories
-        self.trend_models = trend_models
-        self.split_key = split_key
-        self.target_col = target_col
-        self.base_pipelines = base_pipelines
-        self.pipelines_ = {}
+class RecursiveTSEstimatorWithZeroCategories(RecursiveTSEstimator):
+    def __init__(self, split_key, target_col, trend_models=None, detrended_categories=None, base_pipelines=None, zero_categories=None,
+                 trend_pred=None, y_detrended=None):
+        super().__init__(split_key, target_col, base_pipelines)
+        if zero_categories is None:
+            zero_categories = []
+        self.zero_categories = zero_categories
         self.trend_pred = trend_pred
         self.y_detrended = y_detrended
-
-    def fit(self, X, y):
-        for key, X_part in X.groupby(self.split_key):
-            if self.y_detrended is not None:
-                y_part = self.y_detrended.loc[X_part.index]
-            else:
-                y_part = y.loc[X_part.index]
-
-            # save train data for using it in counting rolling features for the test data in the future
-            self.base_pipelines[key].train_data = X_part
-
-            pipeline = clone(self.base_pipelines[key])
-            pipeline = pipeline.fit(X_part.drop(columns=[self.split_key]), y_part)
-
-            self.pipelines_[key] = pipeline
-        return self
+        self.base_pipelines = base_pipelines
+        self.detrended_categories = detrended_categories
+        self.trend_models = trend_models
 
     def predict(self, X):
         y_preds = {}
+        y_trends = {}
         for split_key_value, X_part in X.groupby(self.split_key):
+            if split_key_value in self.zero_categories:
+                y_preds[split_key_value] = pd.Series(0, index=X_part.index, name='forecast')
+                if self.target_col not in X_part.columns:
+                    y_trends[split_key_value] = pd.Series(0, index=X_part.index, name='forecast')
+                continue
+
             pipeline = self.pipelines_[split_key_value]
 
             # all train set + processed test days (for counting rolling features)
@@ -60,8 +46,8 @@ class RecursiveTSEstimator(BaseEstimator):
                             (split_key_value, sorted_dates[current_day_number - lag])].tolist()
 
                 # filling rolling features for current day
-                grp = X_part_all_rows[self.target_col].groupby(X_part_all_rows[pipeline.level])
                 for period in pipeline.rolling_days:
+                    grp = X_part_all_rows[self.target_col].groupby(X_part_all_rows['store_nbr'])
                     rolling_slices = [sliding_window_view(v, period) for _, v in grp]
 
                     for function, aggregate in pipeline.rolling_aggr.items():
@@ -76,14 +62,24 @@ class RecursiveTSEstimator(BaseEstimator):
                 # making predictions and saving them (also to the X_part_all_rows for using them while
                 # counting rolling features for next test days)
                 # also adding new test day to the X_part_all_rows
+                if self.target_col not in X_current_day.columns:
+                    if split_key_value in self.detrended_categories:
+                        y_trend_pred = self.trend_models[split_key_value][0].predict(
+                            pd.DataFrame(self.trend_models[split_key_value][1].iloc[[current_day_number]])
+                        )
+                        y_trends[(split_key_value, current_day)] = pd.Series(data=[y_trend_pred[0]] * len(X_current_day.index),
+                                                                             index=X_current_day.index, name='forecast')
+                    else:
+                        y_trends[(split_key_value, current_day)] = pd.Series(data=0, index=X_current_day.index,
+                                                                             name='forecast')
 
                 y_pred = pipeline.predict(X_current_day.drop(columns=[self.split_key]))
                 X_part_all_rows = pd.concat([X_part_all_rows, X_current_day])
 
                 # for learning curves (while making predictions on the train set)
                 X_part_all_rows = X_part_all_rows.drop_duplicates(
-                    subset=[pipeline.date_column, pipeline.level, self.split_key])
-                X_part_all_rows.loc[X_current_day.index, 'sales'] = y_pred
+                    subset=[col for col in [pipeline.date_column, pipeline.level, self.split_key] if col is not None])
+                X_part_all_rows.loc[X_current_day.index, self.target_col] = y_pred
                 y_preds[(split_key_value, current_day)] = pd.Series(data=y_pred, index=X_current_day.index,
                                                                     name='forecast')
 
@@ -93,6 +89,12 @@ class RecursiveTSEstimator(BaseEstimator):
 
         y_pred = pd.concat(y_preds.values()).loc[X.index]
         if self.trend_pred is None:
-            return y_pred
+            if self.target_col not in X.columns:
+                y_trend = pd.concat(y_trends.values()).loc[X.index]
+                return y_pred + y_trend
+            else:
+                return y_pred
         else:
-            return y_pred + self.trend_pred.loc[y_pred.index]
+            y_final = y_pred + self.trend_pred.loc[y_pred.index]
+            y_final[y_final < 0] = 0
+            return y_final

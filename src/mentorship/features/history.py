@@ -14,5 +14,6 @@ def cut_history(
     if y is not None:
         assert X.index.equals(y.index)
         y = y.loc[X_train.index]
+        return X_train, y
 
-    return X_train, y
+    return X_train

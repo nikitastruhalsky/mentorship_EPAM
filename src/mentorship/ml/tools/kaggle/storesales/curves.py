@@ -7,7 +7,7 @@ from mentorship.ml.models.common import RecursiveTSEstimator
 
 
 def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=None, scoring=None,
-                        train_sizes=None):
+                        train_sizes=None, negate_scores=True):
 
     plt.title(title)
     plt.xlabel("Training examples")
@@ -15,8 +15,12 @@ def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=None, scoring=No
 
     train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, scoring=scoring, cv=cv,
                                                             train_sizes=train_sizes, n_jobs=n_jobs, error_score='raise')
-    train_scores_mean = np.mean(-train_scores, axis=1)
-    test_scores_mean = np.mean(-test_scores, axis=1)
+    if negate_scores:
+        train_scores_mean = np.mean(-train_scores, axis=1)
+        test_scores_mean = np.mean(-test_scores, axis=1)
+    else:
+        train_scores_mean = np.mean(train_scores, axis=1)
+        test_scores_mean = np.mean(test_scores, axis=1)
 
     # Plot learning curve
     plt.grid()
@@ -26,13 +30,17 @@ def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=None, scoring=No
     return plt
 
 
-def learning_curves(X, y, tscv_inner, train_sizes, split_key='family', target_col='sales', lags=[], params={}):
+def plot_learning_curver(X, y, tscv_inner, train_sizes, split_key='family', target_col='sales', lags=None, params=None):
     """
     Function for building learning curves for each family (on the train set of the first cv fold)
     Metric: MSLE
     """
 
     # train set formation
+    if params is None:
+        params = {}
+    if lags is None:
+        lags = []
     splitter = DateTimeSeriesSplit()
     train_indices = next(splitter.split(X, y))[0]
     X_train, y_train = X.iloc[train_indices], y.iloc[train_indices]

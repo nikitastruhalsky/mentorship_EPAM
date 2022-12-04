@@ -4,8 +4,9 @@ from category_encoders import TargetEncoder
 
 
 class LagComputer(PdPipelineStage):
-    def __init__(self, target_col, lags, split_key, date_column='date'):
+    def __init__(self, target_col, lags, split_key, level, date_column='date'):
         self.split_key = split_key
+        self.level = level
         self.lags = lags
         self.target_col = target_col
         self.date_column = date_column
@@ -25,6 +26,10 @@ class LagComputer(PdPipelineStage):
     def _fit_transform(self, X, verbose=None):
         X_last_date = pd.to_datetime(X[self.date_column].max())
 
+        if not self.lags:
+            self.is_fitted = True
+            return X
+
         # saving last train days for the test data
         max_lag = max(self.lags)
         self.last_days_train = X[X[self.date_column] > str(X_last_date - pd.Timedelta(days=max_lag)).split(' ')[0]]
@@ -33,14 +38,13 @@ class LagComputer(PdPipelineStage):
         return X
 
     def _transform(self, X, verbose=None):
-        if self.target_col not in X.columns:
-            # filling lags for the test data with the 'target' of last days in X
-            for current_lag in self.lags:
-                if str(pd.to_datetime(X[self.date_column].min()) - pd.Timedelta(days=current_lag)).split(' ')[0] in \
-                        self.last_days_train[self.date_column].unique():
-                    X['lag_{}'.format(current_lag)] = \
-                        self.last_days_train[self.last_days_train[self.date_column] ==
-                                             str(pd.to_datetime(X[self.date_column].min()) - pd.Timedelta(days=current_lag)).split(' ')[0]][self.target_col].tolist()
+        # filling lags for the test data with the 'target' of last days in X
+        for current_lag in self.lags:
+            if str(pd.to_datetime(X[self.date_column].min()) - pd.Timedelta(days=current_lag)).split(' ')[0] in \
+                    self.last_days_train[self.date_column].unique():
+                X['lag_{}'.format(current_lag)] = \
+                    self.last_days_train[self.last_days_train[self.date_column] ==
+                                         str(pd.to_datetime(X[self.date_column].min()) - pd.Timedelta(days=current_lag)).split(' ')[0]][self.target_col].tolist()
 
         return X
 
