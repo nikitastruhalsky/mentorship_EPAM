@@ -1,12 +1,12 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.model_selection import learning_curve
-from mentorship.ml.cv.split import DateTimeSeriesSplit
+from mentorship.ml.cv.kaggle.storesales.split import DateTimeSeriesSplit
 from mentorship.ml.models.kaggle.storesales.boosting import LGBMPipeline
 from mentorship.ml.models.common import RecursiveTSEstimator
 
 
-def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=None, scoring=None,
+def plot_learning_curve(estimator, title, X, y, cv=None, scoring=None,
                         train_sizes=None, negate_scores=True):
 
     plt.title(title)
@@ -14,7 +14,7 @@ def plot_learning_curve(estimator, title, X, y, cv=None, n_jobs=None, scoring=No
     plt.ylabel("Score")
 
     train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, scoring=scoring, cv=cv,
-                                                            train_sizes=train_sizes, n_jobs=n_jobs, error_score='raise')
+                                                            train_sizes=train_sizes, n_jobs=-1, error_score='raise')
     if negate_scores:
         train_scores_mean = np.mean(-train_scores, axis=1)
         test_scores_mean = np.mean(-test_scores, axis=1)
@@ -52,7 +52,7 @@ def plot_learning_curver(X, y, tscv_inner, train_sizes, split_key='family', targ
         X_current_family = X_train[X_train[split_key] == current_family]
         y_current_family = y_train.loc[X_current_family.index]
 
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(7, 3))
 
         # learning curves (MSLE)
         fit_params = {'categorical_feature': [0]}
@@ -63,5 +63,5 @@ def plot_learning_curver(X, y, tscv_inner, train_sizes, split_key='family', targ
         plot_learning_curve(modelling_pipeline,
                             title=f'{current_family}: Learning Curves (default LGBM Regressor), RMSLE',
                             X=X_current_family, y=y_current_family, cv=tscv_inner, scoring='neg_mean_squared_log_error',
-                            n_jobs=-1, train_sizes=train_sizes)
+                            train_sizes=train_sizes)
         plt.show()
