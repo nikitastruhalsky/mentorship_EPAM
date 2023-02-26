@@ -9,8 +9,8 @@ DATA_ROOT = Path('data', 'kaggle', 'store-sales-time-series-forecasting')
 
 
 class ETLTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, id_column='id', date_column='date', lags=None, target_col=None,
-                 use_final_metric=True, rolling_days=None, rolling_aggr=None):
+    def __init__(self, id_column='id', date_column='date', lags=None, target_col=None, is_test=False,
+                 use_rmsle=True, rolling_days=None, rolling_aggr=None, lagged_feature='sales'):
         self.date_column = date_column
         self.id_column = id_column
         self.oil_data = pd.read_csv(DATA_ROOT / 'oil.csv')
@@ -18,9 +18,11 @@ class ETLTransformer(BaseEstimator, TransformerMixin):
         self.holidays_data = pd.read_csv(DATA_ROOT / 'holidays_events.csv').drop_duplicates(subset='date')
         self.lags = lags
         self.target_col = target_col
-        self.use_final_metric = use_final_metric
+        self.use_rmsle = use_rmsle
         self.rolling_days = rolling_days
         self.rolling_aggr = rolling_aggr
+        self.lagged_feature = lagged_feature
+        self.is_test = is_test
 
     def fit(self, X, y=None):
         return self
@@ -31,15 +33,18 @@ class ETLTransformer(BaseEstimator, TransformerMixin):
         X = X.sort_values(by=[self.id_column], ascending=True, ignore_index=True)
         X = X.drop(columns=[self.id_column])
         X['family'] = X['family'].str.lower()
+        X = X.sort_values(by=['date', 'store_nbr', 'family']).reset_index(drop=True)
+        if not self.is_test:
+            y = X['sales'].copy()
 
-        if self.target_col and self.use_final_metric:
+        if self.target_col and self.use_rmsle:
             X = LogTransformer(cols=self.target_col).fit_transform(X)
 
         # lags for train set
         if self.lags:
             for current_lag in self.lags:
-                X.loc[:, 'lag_{}'.format(current_lag)] = X.groupby(['store_nbr', 'family'])[self.target_col].shift(
-                    current_lag)
+                X.loc[:, '{}_lag_{}'.format(self.lagged_feature, current_lag)] = X.groupby(
+                    ['store_nbr', 'family'])[self.lagged_feature].shift(current_lag)
 
         # rolling features for train set
         if self.rolling_days:
@@ -51,10 +56,10 @@ class ETLTransformer(BaseEstimator, TransformerMixin):
                     X.loc[period * X['store_nbr'].nunique():, f'rolling_{period}d_{aggregate}'] = pd.Series(
                         function(rolling_slices, -1).ravel(order='F'),
                         index=range(period * X['store_nbr'].nunique(), X.shape[0] + X['store_nbr'].nunique()))
-
-        if y is not None:
+        if self.is_test:
+            return X
+        else:
             return X, y
-        return X
 
     def add_is_holiday_feature(self, X):
         X_copy = X.copy()
@@ -65,6 +70,8 @@ class ETLTransformer(BaseEstimator, TransformerMixin):
     def add_store_features(self, X, columns_to_add):
         stores_data = self.stores_data.drop(columns=[x for x in self.stores_data.columns if x != 'store_nbr'
                                                      and x not in columns_to_add])
+        for col in columns_to_add:
+            stores_data[col] = LabelEncoder().fit_transform(stores_data[col])
         stores_data = stores_data.rename(columns={x: 'store_' + x for x in columns_to_add})
         X = X.merge(stores_data, on='store_nbr', how='left')
         return X
